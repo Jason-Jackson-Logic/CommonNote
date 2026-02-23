@@ -1,0 +1,23 @@
+# Dependencies
+node_modules/
+
+# User data
+server/notes.db
+server/uploads/*
+!server/uploads/.gitkeep
+
+# Environment
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build
+dist/
+build/
