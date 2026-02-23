@@ -1,135 +1,142 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { notesApi, trashApi, statsApi } from '../services/api';
 
-export function useNotes() {
-  const [notes, setNotes] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const optionsRef = useRef({});
+export function useNotes(options = {}) {
+  const queryClient = useQueryClient();
 
-  const fetchNotes = useCallback(async (options = {}) => {
-    optionsRef.current = options;
-    setLoading(true);
-    try {
+  const queryKey = ['notes', options];
+
+  const { data: result, isLoading, refetch } = useQuery({
+    queryKey,
+    queryFn: async () => {
       const params = {};
       if (options.categoryId) params.category_id = options.categoryId;
       if (options.search) params.search = options.search;
       if (options.tag) params.tag = options.tag;
       if (options.favorites) params.favorites = 'true';
-      
-      const data = await notesApi.getAll(params);
-      
-      const sortedData = [...data].sort((a, b) => {
-        let aVal, bVal;
-        switch (options.sortBy) {
-          case 'title':
-            aVal = a.title.toLowerCase();
-            bVal = b.title.toLowerCase();
-            break;
-          case 'created_at':
-            aVal = new Date(a.created_at).getTime();
-            bVal = new Date(b.created_at).getTime();
-            break;
-          case 'updated_at':
-          default:
-            aVal = new Date(a.updated_at).getTime();
-            bVal = new Date(b.updated_at).getTime();
-        }
-        if (options.sortOrder === 'asc') {
-          return aVal > bVal ? 1 : -1;
-        }
-        return aVal < bVal ? 1 : -1;
-      });
-      
-      setNotes(sortedData);
-    } finally {
-      setLoading(false);
+      if (options.page) params.page = options.page;
+      if (options.pageSize) params.pageSize = options.pageSize;
+
+      const response = await notesApi.getAll(params);
+
+      if (response.data && response.pagination) {
+        const sortedData = [...response.data].sort((a, b) => {
+          // 优先按置顶排序：置顶的笔记永远在前面
+          if(a.is_pinned !== b.is_pinned) {
+            return b.is_pinned - a.is_pinned;
+          }
+          
+          let aVal, bVal;
+          switch (options.sortBy) {
+            case 'title':
+              aVal = a.title.toLowerCase();
+              bVal = b.title.toLowerCase();
+              break;
+            case 'created_at':
+              aVal = new Date(a.created_at).getTime();
+              bVal = new Date(b.created_at).getTime();
+              break;
+              break;
+            case 'updated_at':
+            default:
+              aVal = new Date(a.updated_at).getTime();
+              bVal = new Date(b.updated_at).getTime();
+          }
+          return options.sortOrder === 'asc' ? (aVal > bVal ? 1 : -1) : (aVal < bVal ? 1 : -1);
+        });
+        return { data: sortedData, pagination: response.pagination };
+      }
+
+      return { data: Array.isArray(response) ? response : [], pagination: { page: 1, pageSize: 20, total: 0, totalPages: 0 } };
     }
-  }, []);
+  });
 
-  useEffect(() => {
-    fetchNotes();
-  }, []);
+  const createMutation = useMutation({
+    mutationFn: notesApi.create,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notes'] });
+      queryClient.invalidateQueries({ queryKey: ['stats'] });
+      queryClient.invalidateQueries({ queryKey: ['tags'] });
+    }
+  });
 
-  const createNote = async (data) => {
-    const result = await notesApi.create(data);
-    await fetchNotes(optionsRef.current);
-    return result;
-  };
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }) => notesApi.update(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notes'] });
+      queryClient.invalidateQueries({ queryKey: ['stats'] });
+      queryClient.invalidateQueries({ queryKey: ['tags'] });
+    }
+  });
 
-  const updateNote = async (id, data) => {
-    const result = await notesApi.update(id, data);
-    await fetchNotes(optionsRef.current);
-    return result;
-  };
-
-  const deleteNote = async (id) => {
-    const result = await notesApi.delete(id);
-    await fetchNotes(optionsRef.current);
-    return result;
-  };
-
-  const getNote = async (id) => {
-    return notesApi.getOne(id);
-  };
+  const deleteMutation = useMutation({
+    mutationFn: notesApi.delete,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notes'] });
+      queryClient.invalidateQueries({ queryKey: ['stats'] });
+      queryClient.invalidateQueries({ queryKey: ['trash'] });
+    }
+  });
 
   return {
-    notes,
-    loading,
-    fetchNotes,
-    createNote,
-    updateNote,
-    deleteNote,
-    getNote
+    notes: result?.data || [],
+    pagination: result?.pagination || { page: 1, pageSize: 20, total: 0, totalPages: 0 },
+    loading: isLoading,
+    fetchNotes: refetch,
+    createNote: createMutation.mutateAsync,
+    updateNote: (id, data) => updateMutation.mutateAsync({ id, data }),
+    deleteNote: deleteMutation.mutateAsync,
+    getNote: notesApi.getOne
   };
 }
 
 export function useTrash() {
-  const [trashNotes, setTrashNotes] = useState([]);
+  const queryClient = useQueryClient();
 
-  const fetchTrash = async () => {
-    const data = await trashApi.getAll();
-    setTrashNotes(data);
-  };
+  const { data: trashNotes = [] } = useQuery({
+    queryKey: ['trash'],
+    queryFn: trashApi.getAll
+  });
 
-  const restoreNote = async (id) => {
-    await trashApi.restore(id);
-    await fetchTrash();
-  };
+  const restoreMutation = useMutation({
+    mutationFn: trashApi.restore,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['trash'] });
+      queryClient.invalidateQueries({ queryKey: ['notes'] });
+      queryClient.invalidateQueries({ queryKey: ['stats'] });
+    }
+  });
 
-  const permanentDelete = async (id) => {
-    await trashApi.delete(id);
-    await fetchTrash();
-  };
+  const deleteMutation = useMutation({
+    mutationFn: trashApi.delete,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['trash'] });
+      queryClient.invalidateQueries({ queryKey: ['stats'] });
+    }
+  });
 
-  const emptyTrash = async () => {
-    await trashApi.empty();
-    await fetchTrash();
-  };
-
-  useEffect(() => {
-    fetchTrash();
-  }, []);
+  const emptyMutation = useMutation({
+    mutationFn: trashApi.empty,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['trash'] });
+      queryClient.invalidateQueries({ queryKey: ['stats'] });
+    }
+  });
 
   return {
     trashNotes,
-    fetchTrash,
-    restoreNote,
-    permanentDelete,
-    emptyTrash
+    fetchTrash: () => queryClient.invalidateQueries({ queryKey: ['trash'] }),
+    restoreNote: restoreMutation.mutateAsync,
+    permanentDelete: deleteMutation.mutateAsync,
+    emptyTrash: emptyMutation.mutateAsync
   };
 }
 
 export function useStats() {
-  const [stats, setStats] = useState({ total: 0, favorites: 0, trash: 0 });
+  const { data: stats = { total: 0, favorites: 0, trash: 0 } } = useQuery({
+    queryKey: ['stats'],
+    queryFn: statsApi.get
+  });
 
-  const fetchStats = async () => {
-    const data = await statsApi.get();
-    setStats(data);
-  };
-
-  useEffect(() => {
-    fetchStats();
-  }, []);
-
-  return { stats, fetchStats };
+  return { stats, fetchStats: () => {} };
 }

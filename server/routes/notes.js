@@ -3,9 +3,15 @@ const router = express.Router();
 const notesService = require('../services/notesService');
 
 router.get('/', (req, res) => {
-  const { category_id, search, tag, favorites } = req.query;
-  const notes = notesService.getAll({ category_id, search, tag, favorites });
-  res.json(notes);
+  const { category_id, search, tag, favorites, page, pageSize } = req.query;
+  const result = notesService.getAll({ category_id, search, tag, favorites, page, pageSize });
+  res.json(result);
+});
+
+router.get('/search/title', (req, res) => {
+  const { q, limit } = req.query;
+  const results = notesService.searchByTitle(q, parseInt(limit) || 10);
+  res.json(results);
 });
 
 router.get('/:id', (req, res) => {
@@ -14,6 +20,11 @@ router.get('/:id', (req, res) => {
     return res.status(404).json({ error: '笔记不存在' });
   }
   res.json(note);
+});
+
+router.get('/:id/backlinks', (req, res) => {
+  const backlinks = notesService.getBacklinks(req.params.id);
+  res.json(backlinks);
 });
 
 router.post('/', (req, res) => {

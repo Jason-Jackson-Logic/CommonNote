@@ -23,7 +23,20 @@ export const notesApi = {
   getOne: (id) => request(`/notes/${id}`),
   create: (data) => request('/notes', { method: 'POST', body: data }),
   update: (id, data) => request(`/notes/${id}`, { method: 'PUT', body: data }),
-  delete: (id) => request(`/notes/${id}`, { method: 'DELETE' })
+  delete: (id) => request(`/notes/${id}`, { method: 'DELETE' }),
+  searchTitle: (q, limit = 10) => request(`/notes/search/title?q=${encodeURIComponent(q)}&limit=${limit}`),
+  getBacklinks: (id) => request(`/notes/${id}/backlinks`)
+};
+
+export const uploadApi = {
+  uploadImage: async (base64Data) => {
+    const res = await fetch(`${API_URL}/upload/image`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: base64Data
+    });
+    return res.json();
+  }
 };
 
 export const categoriesApi = {

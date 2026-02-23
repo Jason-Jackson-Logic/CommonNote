@@ -20,7 +20,7 @@ function processNotes(notes) {
 }
 
 function buildNotesQuery(options = {}) {
-  const { category_id, search, tag, favorites } = options;
+  const { category_id, search, tag, favorites, page = 1, pageSize = 20 } = options;
   
   let sql = `
     SELECT DISTINCT n.id, n.title, n.content, n.category_id, n.is_pinned, n.is_favorite,
@@ -57,13 +57,43 @@ function buildNotesQuery(options = {}) {
   sql += ' WHERE ' + conditions.join(' AND ');
   sql += ' GROUP BY n.id ORDER BY n.is_pinned DESC, n.updated_at DESC';
 
-  return { sql, params };
+  return { sql, params, page: parseInt(page), pageSize: parseInt(pageSize) };
 }
 
 function getAll(options = {}) {
-  const { sql, params } = buildNotesQuery(options);
-  const notes = queryAll(sql, params);
-  return processNotes(notes);
+  const { sql, params, page, pageSize } = buildNotesQuery(options);
+  
+  const countSql = `SELECT COUNT(DISTINCT n.id) as total FROM notes n 
+    LEFT JOIN note_tags nt ON n.id = nt.note_id 
+    LEFT JOIN tags t ON nt.tag_id = t.id 
+    WHERE n.is_deleted = 0${options.category_id ? ' AND n.category_id = ?' : ''}${
+      options.search ? ' AND (n.title LIKE ? OR n.content LIKE ?)' : ''
+    }${options.tag ? ' AND t.name = ?' : ''}${
+      options.favorites === 'true' ? ' AND n.is_favorite = 1' : ''
+    }`;
+  
+  const countParams = [];
+  if (options.category_id) countParams.push(options.category_id);
+  if (options.search) countParams.push(`%${options.search}%`, `%${options.search}%`);
+  if (options.tag) countParams.push(options.tag);
+  
+  const countResult = queryOne(countSql, countParams);
+  const total = countResult ? countResult.total : 0;
+  
+  const offset = (page - 1) * pageSize;
+  const paginatedSql = `${sql} LIMIT ? OFFSET ?`;
+  
+  const notes = queryAll(paginatedSql, [...params, pageSize, offset]);
+  
+  return {
+    data: processNotes(notes),
+    pagination: {
+      page,
+      pageSize,
+      total,
+      totalPages: Math.ceil(total / pageSize)
+    }
+  };
 }
 
 function getOne(id) {
@@ -203,6 +233,41 @@ function getStats() {
   };
 }
 
+function searchByTitle(keyword, limit = 10) {
+  if (!keyword) return [];
+  return queryAll(
+    `SELECT id, title FROM notes 
+     WHERE is_deleted = 0 AND title LIKE ? 
+     ORDER BY updated_at DESC 
+     LIMIT ?`,
+    [`%${keyword}%`, limit]
+  );
+}
+
+function findLinks(content) {
+  const linkRegex = /\[\[([^\]]+)\]\]/g;
+  const links = [];
+  let match;
+  while ((match = linkRegex.exec(content)) !== null) {
+    links.push(match[1]);
+  }
+  return [...new Set(links)];
+}
+
+function getBacklinks(noteId) {
+  const note = queryOne('SELECT title FROM notes WHERE id = ? AND is_deleted = 0', [noteId]);
+  if (!note) return [];
+
+  return queryAll(
+    `SELECT n.id, n.title, n.content, n.updated_at
+     FROM notes n
+     WHERE n.is_deleted = 0 
+     AND n.id != ?
+     AND n.content LIKE ?`,
+    [noteId, `%[[${note.title}]]%`]
+  );
+}
+
 module.exports = {
   getAll,
   getOne,
@@ -213,5 +278,7 @@ module.exports = {
   restore,
   permanentDelete,
   emptyTrash,
-  getStats
+  getStats,
+  searchByTitle,
+  getBacklinks
 };

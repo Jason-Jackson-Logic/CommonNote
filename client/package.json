@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@tanstack/react-query": "^5.90.21",
     "highlight.js": "^11.9.0",
     "katex": "^0.16.28",
     "lucide-react": "^0.312.0",

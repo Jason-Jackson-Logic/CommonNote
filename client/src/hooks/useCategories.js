@@ -1,38 +1,34 @@
-import { useState, useEffect } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { categoriesApi } from '../services/api';
 
 export function useCategories() {
-  const [categories, setCategories] = useState([]);
+  const queryClient = useQueryClient();
 
-  const fetchCategories = async () => {
-    const data = await categoriesApi.getAll();
-    setCategories(data);
-  };
+  const { data: categories = [] } = useQuery({
+    queryKey: ['categories'],
+    queryFn: categoriesApi.getAll
+  });
 
-  const createCategory = async (name) => {
-    await categoriesApi.create(name);
-    await fetchCategories();
-  };
+  const createMutation = useMutation({
+    mutationFn: categoriesApi.create,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['categories'] })
+  });
 
-  const updateCategory = async (id, name) => {
-    await categoriesApi.update(id, name);
-    await fetchCategories();
-  };
+  const updateMutation = useMutation({
+    mutationFn: ({ id, name }) => categoriesApi.update(id, name),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['categories'] })
+  });
 
-  const deleteCategory = async (id) => {
-    await categoriesApi.delete(id);
-    await fetchCategories();
-  };
-
-  useEffect(() => {
-    fetchCategories();
-  }, []);
+  const deleteMutation = useMutation({
+    mutationFn: categoriesApi.delete,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['categories'] })
+  });
 
   return {
     categories,
-    fetchCategories,
-    createCategory,
-    updateCategory,
-    deleteCategory
+    fetchCategories: () => queryClient.invalidateQueries({ queryKey: ['categories'] }),
+    createCategory: createMutation.mutateAsync,
+    updateCategory: (id, name) => updateMutation.mutateAsync({ id, name }),
+    deleteCategory: deleteMutation.mutateAsync
   };
 }

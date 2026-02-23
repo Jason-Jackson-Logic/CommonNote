@@ -1,17 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { tagsApi } from '../services/api';
 
 export function useTags() {
-  const [tags, setTags] = useState([]);
+  const { data: tags = [] } = useQuery({
+    queryKey: ['tags'],
+    queryFn: tagsApi.getAll
+  });
 
-  const fetchTags = async () => {
-    const data = await tagsApi.getAll();
-    setTags(data);
-  };
-
-  useEffect(() => {
-    fetchTags();
-  }, []);
-
-  return { tags, fetchTags };
+  return { tags, fetchTags: () => {} };
 }

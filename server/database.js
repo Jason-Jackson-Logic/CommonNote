@@ -69,6 +69,21 @@ async function initDatabase() {
     )
   `);
 
+  // 创建索引以优化查询性能
+  const createIndexes = [
+    'CREATE INDEX IF NOT EXISTS idx_notes_category ON notes(category_id)',
+    'CREATE INDEX IF NOT EXISTS idx_notes_deleted ON notes(is_deleted)',
+    'CREATE INDEX IF NOT EXISTS idx_notes_updated ON notes(updated_at)',
+    'CREATE INDEX IF NOT EXISTS idx_notes_pinned ON notes(is_pinned)',
+    'CREATE INDEX IF NOT EXISTS idx_notes_favorite ON notes(is_favorite)',
+    'CREATE INDEX IF NOT EXISTS idx_notetags_note ON note_tags(note_id)',
+    'CREATE INDEX IF NOT EXISTS idx_notetags_tag ON note_tags(tag_id)',
+    'CREATE INDEX IF NOT EXISTS idx_tags_name ON tags(name)'
+  ];
+  createIndexes.forEach(sql => {
+    try { db.run(sql); } catch (e) {}
+  });
+
   // 插入默认分类
   const defaultCategories = ['默认', '工作', '学习', '生活'];
   defaultCategories.forEach(name => {

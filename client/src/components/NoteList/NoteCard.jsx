@@ -1,21 +1,34 @@
 import { Pin, Star } from 'lucide-react';
 import { formatDate } from '../../utils/formatDate';
 
-export function NoteCard({ note, isSelected, onClick }) {
+export function NoteCard({ note, isSelected, isSelectMode, checked, onClick, onCheck }) {
   return (
     <li
-      onClick={onClick}
+      onClick={isSelectMode ? () => onCheck(note.id) : onClick}
       className={`p-4 border-b border-gray-100 dark:border-gray-800 cursor-pointer transition-colors ${
         isSelected
           ? 'bg-blue-50 dark:bg-gray-800'
+          : checked
+          ? 'bg-blue-50 dark:bg-gray-700'
           : 'hover:bg-gray-50 dark:hover:bg-gray-800'
       }`}
     >
       <div className="flex items-start justify-between">
-        <h3 className="font-medium text-gray-800 dark:text-white line-clamp-1 flex items-center gap-2">
-          {note.is_pinned === 1 && <Pin className="w-4 h-4 text-orange-500 flex-shrink-0" />}
-          {note.title}
-        </h3>
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          {isSelectMode && (
+            <input
+              type="checkbox"
+              checked={checked}
+              onChange={() => onCheck(note.id)}
+              onClick={(e) => e.stopPropagation()}
+              className="w-4 h-4 rounded border-gray-300 text-blue-500 focus:ring-blue-500"
+            />
+          )}
+          <h3 className="font-medium text-gray-800 dark:text-white line-clamp-1 flex items-center gap-2">
+            {note.is_pinned === 1 && <Pin className="w-4 h-4 text-orange-500 flex-shrink-0" />}
+            {note.title}
+          </h3>
+        </div>
         {note.is_favorite === 1 && (
           <Star className="w-4 h-4 text-yellow-500 fill-yellow-500 flex-shrink-0" />
         )}

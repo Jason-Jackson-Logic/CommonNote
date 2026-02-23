@@ -1,8 +1,9 @@
-import { useState } from 'react';
-import { Folder, Plus, Search, Moon, Sun, Trash, FolderPlus } from 'lucide-react';
+import { useState, useRef } from 'react';
+import { Folder, Plus, Search, Moon, Sun, Trash, FolderPlus, FileUp } from 'lucide-react';
 import { SearchInput } from '../common/SearchInput';
 import { CategoryList } from './CategoryList';
 import { TagCloud } from './TagCloud';
+import { importMarkdownFiles } from '../../utils/importNote';
 
 export function Sidebar({ 
   darkMode, 
@@ -23,12 +24,15 @@ export function Sidebar({
   onUpdateCategory,
   showTrash,
   trashCount,
-  onShowTrash
+  onShowTrash,
+  onImportNotes
 }) {
   const [showNewCategory, setShowNewCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [editingCategoryId, setEditingCategoryId] = useState(null);
   const [editingCategoryName, setEditingCategoryName] = useState('');
+  const [importing, setImporting] = useState(false);
+  const fileInputRef = useRef(null);
 
   const handleCreateCategory = async () => {
     if (!newCategoryName.trim()) return;
@@ -49,6 +53,29 @@ export function Sidebar({
     setEditingCategoryName('');
   };
 
+  const handleFileSelect = async (e) => {
+    const files = Array.from(e.target.files);
+    if (files.length === 0) return;
+
+    setImporting(true);
+    try {
+      const results = await importMarkdownFiles(files, onImportNotes);
+      const success = results.filter(r => r.success).length;
+      const failed = results.filter(r => !r.success).length;
+      
+      if (failed > 0) {
+        alert(`导入完成：成功 ${success} 个，失败 ${failed} 个`);
+      } else if (success > 0) {
+        alert(`成功导入 ${success} 篇笔记`);
+      }
+    } catch (error) {
+      alert('导入失败：' + error.message);
+    } finally {
+      setImporting(false);
+      e.target.value = '';
+    }
+  };
+
   const categoriesWithEdit = categories.map(cat => ({
     ...cat,
     isEditing: editingCategoryId === cat.id,
@@ -59,7 +86,7 @@ export function Sidebar({
   }));
 
   return (
-    <aside className="w-64 bg-gray-100 dark:bg-gray-800 flex flex-col border-r border-gray-200 dark:border-gray-700">
+    <aside className="h-full bg-gray-100 dark:bg-gray-800 flex flex-col">
       <div className="p-4 border-b border-gray-200 dark:border-gray-700">
         <h1 className="text-xl font-bold text-gray-800 dark:text-white flex items-center gap-2">
           <Folder className="w-6 h-6" />
@@ -67,7 +94,7 @@ export function Sidebar({
         </h1>
       </div>
 
-      <div className="p-4">
+      <div className="p-4 space-y-2">
         <button
           onClick={onNewNote}
           className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
@@ -76,13 +103,30 @@ export function Sidebar({
           新建笔记
           <span className="text-xs opacity-70">(Ctrl+N)</span>
         </button>
+        
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".md"
+          multiple
+          onChange={handleFileSelect}
+          className="hidden"
+        />
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          disabled={importing}
+          className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors disabled:opacity-50"
+        >
+          <FileUp className="w-5 h-5" />
+          {importing ? '导入中...' : '导入 Markdown'}
+        </button>
       </div>
 
       <div className="px-4 pb-4">
         <SearchInput value={searchQuery} onChange={onSearchChange} />
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4">
+      <div className="flex-1 overflow-y-auto px-4 min-h-0">
         <div className="flex items-center justify-between mb-2">
           <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
             分类
