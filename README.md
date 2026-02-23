@@ -1,4 +1,4 @@
-# 笔记系统 (Notes App)
+# 普通笔记 (CommonNote)
 
 一个基于 React + Express + sql.js 的个人笔记管理系统，支持 Markdown 编辑、双向链接、图片上传等功能。
 
